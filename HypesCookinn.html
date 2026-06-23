@@ -270,15 +270,24 @@ function heroArrive(h){
     else { h.carry=null; addFloat(ST.fridge.x,ST.fridge.y-72,'put back','#cfe6ee'); } // tap again to drop — never get stuck
   }
   else if(t.type==='fryer'){
-    if(h.carry==='raw'){ const s=S.fryer.find(f=>f.state==='empty'); if(s){s.state='cooking';s.t=0;h.carry=null;} }
-    else if(!h.carry){ const s=S.fryer.find(f=>f.state==='done'); if(s){s.state='empty';h.carry='cooked';} }
+    if(h.carry==='raw'){
+      const s=S.fryer.find(f=>f.state==='empty');
+      if(s){ s.state='cooking'; s.t=0; h.carry=null; beep('drop'); }
+      else { beep('nope'); addFloat(ST.fryer.x,ST.fryer.y-52,'fryer full!','#e8443b'); }
+    } else if(!h.carry){
+      const s=S.fryer.find(f=>f.state==='done');
+      if(s){ s.state='empty'; h.carry='cooked'; beep('pickup'); }     // <-- satisfying grab sound
+      else { beep('nope'); const cooking=S.fryer.some(f=>f.state==='cooking');
+        addFloat(ST.fryer.x,ST.fryer.y-52, cooking?'still frying…':'cook a fillet!', cooking?'#ffb43d':'#cfe6ee'); }
+    } else { beep('nope'); }   // already holding a plate
   }
   else if(t.type==='table'){ const tb=S.tables[t.i]; if(tb.dirty){ tb.dirty=false;
     burst(tb.x,tb.y-20,'#aee',12); addFloat(tb.x,tb.y-40,'SPARKLE','#7fd6ff'); beep('serve'); } }
-  else if(t.type==='customer'){ const c=S.queue[t.i]; if(c && c.state==='waiting' && h.carry==='cooked'){ serve(t.i); } }
+  else if(t.type==='customer'){ const c=S.queue[t.i];
+    if(c && c.state==='waiting' && h.carry==='cooked'){ h.carry=null; serve(t.i); } }
 }
-function serve(i){
-  const c=S.queue[i]; S.hero.carry=null;
+function serve(i){          // caller clears its own carry — hero OR helper can serve
+  const c=S.queue[i];
   const pts=10+Math.min(S.combo,9)*2;
   S.combo++; S.bestCombo=Math.max(S.bestCombo,S.combo);
   S.score+=pts; S.served++;
@@ -320,27 +329,52 @@ function updateHero(h,dt){
   // no task -> Hype just chills right where he is (no auto-return home)
 }
 
-/* helper: an ambient line cook who wanders the floor and SOMETIMES pitches in
-   to fry a fillet. No hard rules — just vibes. */
-function newWanderSpot(hp){ hp.wx=rand(150,360); hp.wy=rand(300,560); hp.restT=rand(1.0,2.8); }
+/* helper: an ambient worker who wanders, fries fillets, AND runs plates out to
+   customers. The catch: when every table is dirty, he refuses to serve people
+   (he won't squeeze past a messy room) — so keep tables clean to keep his help. */
+function newWanderSpot(hp){ hp.wx=rand(150,360); hp.wy=rand(300,560); hp.restT=rand(1.0,2.6); }
+function firstWaiting(){ for(let i=0;i<S.queue.length;i++){ const c=S.queue[i]; if(c&&c.state==='waiting') return i; } return -1; }
 function updateHelper(hp,dt){
   hp.anim+=dt; hp.restT-=dt;
-  const emptySlot=()=>S.fryer.find(f=>f.state==='empty');
+  const allDirty = S.tables.every(t=>t.dirty);
+  const emptySlot = S.fryer.some(f=>f.state==='empty');
+  const doneSlot  = S.fryer.some(f=>f.state==='done');
+  const canServe  = !allDirty && firstWaiting()>=0;   // the rule: no serving when the room's a mess
+
   if(hp.phase==='wander'){
     hp.moving = !moveToward(hp,hp.wx,hp.wy,HELPER_SPD*0.65*dt);
+    if(hp.carry==='cooked'){ if(canServe){ hp.phase='toServe'; return; } }   // holding a plate? go serve
     if(!hp.moving || hp.restT<=0){
-      if(emptySlot() && Math.random()<0.5) hp.phase='toFridge';  // feel like helping
-      else newWanderSpot(hp);                                     // nah, keep roaming
+      const r=Math.random();
+      if(canServe && doneSlot && r<0.55)      hp.phase='toGrab';   // run food out
+      else if(emptySlot && r<0.85)            hp.phase='toFridge'; // or cook one
+      else                                     newWanderSpot(hp);   // or just vibe
     }
   } else if(hp.phase==='toFridge'){
     hp.moving=true;
-    if(moveToward(hp,ST.fridge.stand.x,ST.fridge.stand.y,HELPER_SPD*dt)){ hp.carry='raw'; hp.phase='toFryer'; }
-  } else if(hp.phase==='toFryer'){
+    if(moveToward(hp,ST.fridge.stand.x,ST.fridge.stand.y,HELPER_SPD*dt)){ hp.carry='raw'; hp.phase='toCook'; }
+  } else if(hp.phase==='toCook'){
     hp.moving=true;
     if(moveToward(hp,ST.fryer.stand.x+40,ST.fryer.stand.y,HELPER_SPD*dt)){
-      const s=emptySlot();
+      const s=S.fryer.find(f=>f.state==='empty');
       if(s && hp.carry==='raw'){ s.state='cooking'; s.t=0; }
       hp.carry=null; hp.phase='wander'; newWanderSpot(hp);
+    }
+  } else if(hp.phase==='toGrab'){
+    hp.moving=true;
+    if(moveToward(hp,ST.fryer.stand.x-40,ST.fryer.stand.y,HELPER_SPD*dt)){
+      const s=S.fryer.find(f=>f.state==='done');
+      if(s){ s.state='empty'; hp.carry='cooked'; hp.phase='toServe'; }
+      else { hp.phase='wander'; newWanderSpot(hp); }   // hero grabbed it first
+    }
+  } else if(hp.phase==='toServe'){
+    hp.moving=true;
+    if(allDirty){ hp.phase='wander'; return; }          // stop serving while the room's all dirty
+    const idx=firstWaiting();
+    if(idx<0){ hp.phase='wander'; return; }             // nobody to serve; hold the plate & roam
+    if(moveToward(hp,COUNTER_X-112,QUEUE_Y[idx],HELPER_SPD*dt)){
+      if(S.queue[idx] && S.queue[idx].state==='waiting' && hp.carry==='cooked'){ hp.carry=null; serve(idx); }
+      hp.phase='wander'; newWanderSpot(hp);
     }
   }
 }
@@ -622,7 +656,7 @@ function drawHelper(){
   // chef hat
   ctx.fillStyle='#fff';roundRect(-10,-44,20,12,5);ctx.fill();ctx.fillRect(-9,-36,18,6);
   ctx.restore();
-  if(hp.carry){ drawImgC(IMG.raw,hp.x,hp.y-50,30); }
+  if(hp.carry){ drawImgC(hp.carry==='cooked'?IMG.fishchips:IMG.raw, hp.x, hp.y-50, hp.carry==='cooked'?34:30); }
 }
 function drawCustomer(c){
   const bobY=c.state==='eating'?Math.sin(c.bob*6)*1.5:Math.sin(c.bob*4)*2;
@@ -713,7 +747,7 @@ function label(x,y,txt,col){
 /* ============================================================
    AUDIO — WebAudio beat. hip hop vs country
 ============================================================ */
-let actx=null, audioReady=false, master=null, nextNote=0, step=0, lastGenre=null, leadIdx=0;
+let actx=null, audioReady=false, master=null, nextNote=0, step=0, lastGenre=null, leadIdx=0, cnBar=0;
 function initAudio(){ if(audioReady)return; try{
   actx=new (window.AudioContext||window.webkitAudioContext)();
   master=actx.createGain(); master.gain.value=0.5;
@@ -768,27 +802,46 @@ function kpString(t,freq,dur,amp,damp){ const sr=actx.sampleRate;
   g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(amp||0.2,t+0.006);
   g.gain.setValueAtTime(amp||0.2,t+0.02);
   s.connect(f);f.connect(g);g.connect(master);s.start(t);s.stop(t+(dur||0.5)+0.05);}
-function strum(t,freqs,amp,damp){ freqs.forEach((fr,i)=>kpString(t+i*0.013,fr,0.55,amp||0.16,damp)); }
+function strum(t,freqs,amp,damp){ freqs.forEach((fr,i)=>kpString(t+i*0.012,fr,0.6,amp||0.16,damp)); }
+/* pedal-steel-ish bend — sliding sawtooth with vibrato, very country */
+function steelBend(t,f0,f1,dur,amp){
+  const o=actx.createOscillator(),g=actx.createGain(),f=actx.createBiquadFilter();
+  o.type='sawtooth'; f.type='lowpass'; f.frequency.value=2600;
+  o.frequency.setValueAtTime(f0,t); o.frequency.linearRampToValueAtTime(f1,t+dur*0.45);
+  const lfo=actx.createOscillator(),lg=actx.createGain(); lfo.frequency.value=5.5; lg.gain.value=4;
+  lfo.connect(lg); lg.connect(o.frequency); lfo.start(t); lfo.stop(t+dur+0.05);
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(amp,t+0.03);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(f); f.connect(g); g.connect(master); o.start(t); o.stop(t+dur+0.05);
+}
 
 /* --- patterns (16 steps / bar) --- */
 const HH_BASS={0:55,6:55,8:49,10:82.41,13:65.41};     // A minor groove, sub octave
 const HH_STAB=[220,261.63,329.63,392];                 // Am7 soul stab
-const CN_LEAD=[392,330,294,247,294,330,392,440];       // G-major twang lick (G4 E4 D4 B3 ...)
-const CN_CHORD=[196,247,294];                          // G major triad strum (G3 B3 D4)
+// country I-IV-V in G: each bar = {bass root, alt-bass fifth, chord notes, banjo-roll scale}
+const CN_PROG=[
+  {root:98.00, fifth:73.42, chord:[196,247,294],  scale:[294,392,494,392,330,392,294,247]}, // G
+  {root:130.81,fifth:98.00, chord:[262,330,392],  scale:[330,392,523,392,440,392,330,262]}, // C
+  {root:98.00, fifth:73.42, chord:[196,247,294],  scale:[294,392,494,392,330,392,294,247]}, // G
+  {root:146.83,fifth:110.0, chord:[294,370,440],  scale:[370,440,587,440,494,440,370,294]}, // D
+];
 function audioTick(country){
   if(!audioReady||muted)return;
   const genre=country?'cn':'hh';
-  if(genre!==lastGenre){ step=0; leadIdx=0; lastGenre=genre; nextNote=Math.max(nextNote,actx.currentTime+0.04); }
-  const spb=country?0.215:0.182;   // seconds per 16th step
+  if(genre!==lastGenre){ step=0; leadIdx=0; cnBar=0; lastGenre=genre; nextNote=Math.max(nextNote,actx.currentTime+0.04); }
+  const spb=country?0.205:0.182;   // seconds per 16th step
   while(nextNote < actx.currentTime+0.13){
     const t=nextNote, sw=(step%2? spb*0.12:0);  // swing
     if(country){
-      // boom-chick: alternating bass on the beats, chord "chick" on the offbeats
-      if(step===0||step===8) bass(t,98,0.26,0.5,'triangle');     // G2 root
-      if(step===4||step===12){ bass(t,73.42,0.22,0.42,'triangle'); strum(t,CN_CHORD,0.15,0.994); } // D2 + strum
-      // rolling twang lead
-      if(step%2===0){ kpString(t, CN_LEAD[leadIdx%CN_LEAD.length], 0.5, 0.2, 0.994); leadIdx++; }
-      if(step===14) kpString(t, CN_LEAD[(leadIdx)%CN_LEAD.length]*2, 0.4, 0.14, 0.99); // little high flick
+      const cur=CN_PROG[cnBar%CN_PROG.length], bi=cnBar%CN_PROG.length;
+      // boom-CHICK: alternating root/fifth bass with a chord strum on the "chick"
+      if(step===0||step===8){ bass(t,cur.root,0.26,0.52,'triangle'); }
+      if(step===4||step===12){ bass(t,cur.fifth,0.22,0.44,'triangle'); strum(t,cur.chord,0.2,0.994); }
+      // rolling banjo: a pluck on every 8th, lighter fills between
+      if(step%2===0){ kpString(t, cur.scale[(step/2)%cur.scale.length], 0.42, 0.26, 0.993); }
+      else if(step%4===3){ kpString(t, cur.scale[((step-3)/2+1)%cur.scale.length]*2, 0.26, 0.12, 0.99); }
+      // pedal-steel cry to open the C and D bars
+      if(step===0 && (bi===1||bi===3)) steelBend(t, cur.chord[2]*0.84, cur.chord[2], 0.55, 0.2);
     }else{
       // boom-bap drums
       if(step===0||step===6||step===10) kick(t, step===0?1.0:0.85);
@@ -798,7 +851,8 @@ function audioTick(country){
       if(HH_BASS[step]!=null) bass(t,HH_BASS[step],0.2,0.55,'sine');
       if(step===2||step===10) stab(t,HH_STAB,0.22,0.09);
     }
-    step=(step+1)%16; nextNote+=spb;
+    step++; if(step>=16){ step=0; cnBar++; }
+    nextNote+=spb;
   }
 }
 function beep(kind){ if(!audioReady||muted)return; const t=actx.currentTime;
@@ -807,6 +861,23 @@ function beep(kind){ if(!audioReady||muted)return; const t=actx.currentTime;
     o.frequency.setValueAtTime(220,t);o.frequency.exponentialRampToValueAtTime(70,t+0.3);
     env(g,t,0.01,0.3,0.3);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.35);}
   else if(kind==='day'){ [523,659,784].forEach((f,i)=>kpString(t+i*0.09,f,0.4,0.2,0.992)); }
+  else if(kind==='pickup'){ // bright rising "got it!" chime
+    [784,1047,1319].forEach((f,i)=>{ const o=actx.createOscillator(),g=actx.createGain();
+      o.type='triangle';o.frequency.value=f;env(g,t+i*0.05,0.004,0.13,0.32);
+      o.connect(g);g.connect(master);o.start(t+i*0.05);o.stop(t+i*0.05+0.2);}); }
+  else if(kind==='drop'){ // fillet into the oil: low thunk + sizzle
+    const o=actx.createOscillator(),g=actx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(300,t);o.frequency.exponentialRampToValueAtTime(110,t+0.1);
+    env(g,t,0.003,0.12,0.4);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.18);
+    const b=actx.createBuffer(1,4000,actx.sampleRate),d=b.getChannelData(0);
+    for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,1.2);
+    const s=actx.createBufferSource();s.buffer=b;const gg=actx.createGain(),f=actx.createBiquadFilter();
+    f.type='highpass';f.frequency.value=4500;env(gg,t+0.02,0.005,0.18,0.12);
+    s.connect(f);f.connect(gg);gg.connect(master);s.start(t+0.02); }
+  else if(kind==='nope'){ // soft "nothing there" tick
+    const o=actx.createOscillator(),g=actx.createGain();
+    o.type='square';o.frequency.value=160;env(g,t,0.004,0.08,0.12);
+    o.connect(g);g.connect(master);o.start(t);o.stop(t+0.12); }
 }
 
 /* ============================================================
