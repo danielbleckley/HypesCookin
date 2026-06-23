@@ -185,12 +185,12 @@ function moveToward(e,tx,ty,step){
 
 /* ---------- layout / station positions ---------- */
 const COUNTER_X = 452;
-const QUEUE_Y = [256,363,470,577];                       // 4 customers, same span, wider gaps
+const QUEUE_Y = [292,381,470,559];                       // 4 customers; top one dropped clear of the boombox
 const TABLE = [{x:108,y:606},{x:240,y:606},{x:372,y:606}]; // moved up — less travel
 const ST = {
   boombox:{x:240,y:152, stand:{x:240,y:226}},            // big & dead-center, easy one-handed reach
   fridge: {x:62,y:374,  stand:{x:114,y:398}},
-  fryer:  {x:240,y:392, stand:{x:240,y:456}},
+  fryer:  {x:240,y:392, stand:{x:240,y:456}, top:346, bot:456},
 };
 const HERO_HOME={x:240,y:480}, HELPER_HOME={x:330,y:320};
 
@@ -269,13 +269,14 @@ function hit(p){
   for(let i=0;i<S.tables.length;i++){
     if(dist(p.x,p.y,S.tables[i].x,S.tables[i].y)<66) return {type:'table',i};
   }
-  // queue customers (wide box, big vertical reach between the 4 of them)
+  // queue customers — generous box that also covers their order bubble above the head
   for(let i=0;i<S.queue.length;i++){
     const c=S.queue[i]; if(!c) continue;
-    if(p.x>COUNTER_X-100 && Math.abs(p.y-QUEUE_Y[i])<52) return {type:'customer',i};
+    if(p.x>COUNTER_X-104 && p.y>QUEUE_Y[i]-72 && p.y<QUEUE_Y[i]+36) return {type:'customer',i};
   }
-  // boombox last, tight radius (center of the speakers) so it doesn't grab nearby taps
-  if(dist(p.x,p.y,ST.boombox.x,ST.boombox.y)<70) return {type:'boombox'};
+  // boombox last — a tight box on the boombox body that stops well above the
+  // customer row, so reaching for the top customer can never trigger the music
+  if(p.x>178 && p.x<302 && p.y>92 && p.y<206) return {type:'boombox'};
   return null;
 }
 function onTap(e){
@@ -285,6 +286,8 @@ function onTap(e){
   const p=vcoord(e);
   const h=hit(p);
   if(!h) return;
+  // fryer: walk to whichever side (top/bottom) Hype is already nearest — no detour around it
+  if(h.type==='fryer') h.fy = (S.hero.y < ST.fryer.y) ? ST.fryer.top : ST.fryer.bot;
   S.hero.task=h;            // hero will path & resolve on arrival
 }
 cv.addEventListener('pointerdown',onTap,{passive:false});
@@ -301,7 +304,7 @@ function standOf(task){
   switch(task.type){
     case 'boombox': return ST.boombox.stand;
     case 'fridge':  return ST.fridge.stand;
-    case 'fryer':   return ST.fryer.stand;
+    case 'fryer':   return {x:ST.fryer.x, y: task.fy!=null?task.fy:ST.fryer.bot};
     case 'table':   return {x:S.tables[task.i].x, y:S.tables[task.i].y-52};
     case 'customer':return {x:COUNTER_X-72, y:QUEUE_Y[task.i]};
   }
