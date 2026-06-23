@@ -12,6 +12,7 @@
 !/index.html
 !/HypesCookinn.html
 !/game
+!/music
 
 # within the game folder, drop debug previews and caches
 game/assets/_*.png
