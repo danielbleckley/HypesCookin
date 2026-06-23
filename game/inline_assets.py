@@ -17,6 +17,7 @@ ASSETS = {
     "hush":     ("food_hushpuppies.png",200), "pie":("food_pie.png",200),
     "pudding":  ("food_pudding.png",200), "drink":("drink.png",200),
     "raw":      ("food_raw.png",200), "napkins":("napkins.png",160),
+    "logo":     ("logo.png", 600),
 }
 
 def data_uri(path, maxd):
