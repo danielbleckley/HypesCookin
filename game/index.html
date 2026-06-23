@@ -204,7 +204,7 @@ const HERO_HOME={x:240,y:480}, HELPER_HOME={x:330,y:320};
 const COOK_TIME=4.0, FRYER_SLOTS=4, QUEUE_MAX=4, TABLES=3;
 const HERO_SPD=255, HELPER_SPD=190, BOOST_MULT=1.6;
 const BASE_PATIENCE=26, EAT_TIME=7.5, MAX_HEARTS=5;
-const MUSIC_DRIFT_BASE=0.026;     // hip-hop -> country per sec at day 1
+const MUSIC_DRIFT_BASE=0.026;     // constant hip-hop -> country drift (~27s full cycle, every day)
 const COUNTRY_ZONE=0.34;          // below this = country plays, line bails fast
 const COUNTRY_DRAIN=2.0;          // patience drain multiplier while country plays
 const PUDDING_BOOST=6.0;          // speed boost for delivering a banana-pudding order
@@ -455,8 +455,8 @@ function update(dt){
   if(S.scratch>0) S.scratch=Math.max(0,S.scratch-dt);
   if(S.boost>0) S.boost=Math.max(0,S.boost-dt);                       // speed-boost countdown
 
-  // music drifts toward country
-  S.music=clamp(S.music - MUSIC_DRIFT_BASE*(1+S.day*0.12)*dt, 0, 1);
+  // music drifts toward country at a CONSTANT rate (never speeds up with score/day)
+  S.music=clamp(S.music - MUSIC_DRIFT_BASE*dt, 0, 1);
   // genre uses hysteresis + a dwell timer so it never rapidly flips between the
   // hip-hop track and the country synth near the threshold
   S.switchLock=Math.max(0,S.switchLock-dt);
