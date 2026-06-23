@@ -840,7 +840,7 @@ function label(x,y,txt,col){
 let actx=null, audioReady=false, master=null, nextNote=0, step=0, lastGenre=null, leadIdx=0, cnBar=0;
 // real hip-hop instrumental tracks (country stays synth — it's meant to be annoying)
 let tracks=[], trackIdx=0, tracksOk=false;
-const TRACK_SRCS=['music/mad-jino-the-man.mp3','music/danger-roberts-one-day.mp3'];
+const TRACK_SRCS=['music/eMastered_boombapclip.mp3','music/eMastered_wednesdayclip.mp3','music/danger-roberts-one-day.mp3'];
 function initAudio(){ if(audioReady)return; try{
   actx=new (window.AudioContext||window.webkitAudioContext)();
   master=actx.createGain(); master.gain.value=0.5;
