@@ -462,9 +462,10 @@ function update(dt){
   S.switchLock=Math.max(0,S.switchLock-dt);
   if(S.switchLock<=0){
     if(S.countryMode && S.music>0.44){ S.countryMode=false; S.switchLock=1.5;
-      trackIdx=(trackIdx+1)%Math.max(1,tracks.length);        // fresh Tre Hype track each time you flip back to hip hop
-      const tr=currentTrack(); if(tr) try{ tr.currentTime=0; }catch(e){} }
-    else if(!S.countryMode && S.music<0.30){ S.countryMode=true; S.switchLock=1.5; }
+      hhIdx=(hhIdx+1)%Math.max(1,hhTracks.length);            // fresh hip-hop track each time you flip back
+      const tr=currentHH(); if(tr) try{ tr.currentTime=0; }catch(e){} }
+    else if(!S.countryMode && S.music<0.30){ S.countryMode=true; S.switchLock=1.5;
+      if(cnTrack) try{ cnTrack.currentTime=0; }catch(e){} }   // country song restarts from the top
   }
   const country = S.countryMode;
   S.vibePulse += dt*(country?9:5);
@@ -839,8 +840,13 @@ function label(x,y,txt,col){
 ============================================================ */
 let actx=null, audioReady=false, master=null, nextNote=0, step=0, lastGenre=null, leadIdx=0, cnBar=0;
 // real hip-hop instrumental tracks (country stays synth — it's meant to be annoying)
-let tracks=[], trackIdx=0, tracksOk=false;
-const TRACK_SRCS=['music/eMastered_boombapclip.mp3','music/eMastered_wednesdayclip.mp3','music/danger-roberts-one-day.mp3'];
+// hip-hop tracks rotate; the country track plays when the music drifts country.
+// (synth beats are a fallback only if an mp3 can't load — e.g. opened as a bare file)
+let hhTracks=[], hhIdx=0, hhOk=false, cnTrack=null, cnOk=false;
+const HH_SRCS=['music/eMastered_boombapclip.mp3','music/eMastered_wednesdayclip.mp3'];
+const CN_SRC='music/danger-roberts-one-day.mp3';
+function mkAudio(src,onOk){ const a=new Audio(src); a.loop=true; a.volume=0.55; a.preload='auto';
+  a.addEventListener('canplay',onOk,{once:true}); a.addEventListener('error',()=>{}); return a; }
 function initAudio(){ if(audioReady)return; try{
   actx=new (window.AudioContext||window.webkitAudioContext)();
   master=actx.createGain(); master.gain.value=0.5;
@@ -848,17 +854,21 @@ function initAudio(){ if(audioReady)return; try{
   comp.threshold.value=-14; comp.ratio.value=4;
   master.connect(comp); comp.connect(actx.destination);
   audioReady=true; nextNote=actx.currentTime+0.06;
-  // load tracks; if they 404 (e.g. opened as a bare file), tracksOk stays false -> synth hip-hop fallback
-  tracks=TRACK_SRCS.map(src=>{ const a=new Audio(src); a.loop=true; a.volume=0.55; a.preload='auto';
-    a.addEventListener('canplay',()=>{ tracksOk=true; },{once:true}); a.addEventListener('error',()=>{}); return a; });
+  hhTracks=HH_SRCS.map(src=>mkAudio(src,()=>{hhOk=true;}));
+  cnTrack=mkAudio(CN_SRC,()=>{cnOk=true;});
 }catch(e){} }
-function currentTrack(){ return tracks[trackIdx%tracks.length]; }
-function playTrack(){ const tr=currentTrack(); if(!tr)return;
-  tracks.forEach(t=>{ if(t!==tr && !t.paused) t.pause(); });
+function currentHH(){ return hhTracks[hhIdx%hhTracks.length]; }
+function pauseAllTracks(){ hhTracks.forEach(t=>{ if(!t.paused) t.pause(); }); if(cnTrack&&!cnTrack.paused) cnTrack.pause(); }
+function playHH(){ if(cnTrack&&!cnTrack.paused)cnTrack.pause();
+  const tr=currentHH(); if(!tr)return; hhTracks.forEach(t=>{ if(t!==tr&&!t.paused) t.pause(); });
   if(tr.paused) tr.play().catch(()=>{}); }
-function pauseTracks(){ tracks.forEach(t=>{ if(!t.paused) t.pause(); }); }
+function playCN(){ hhTracks.forEach(t=>{ if(!t.paused) t.pause(); });
+  if(cnTrack&&cnTrack.paused) cnTrack.play().catch(()=>{}); }
 function updateMusic(country){ if(!audioReady)return;
-  if(muted||!tracksOk||country) pauseTracks(); else playTrack(); }
+  if(muted){ pauseAllTracks(); return; }
+  if(country){ if(cnOk) playCN(); else pauseAllTracks(); }   // synth twang fills in if the country mp3 is missing
+  else { if(hhOk) playHH(); else pauseAllTracks(); }
+}
 function env(g,t,a,d,peak){ g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(peak,t+a);
   g.gain.exponentialRampToValueAtTime(0.0001,t+a+d); }
 
@@ -930,12 +940,13 @@ const CN_PROG=[
 ];
 function audioTick(country){
   if(!audioReady)return;
-  updateMusic(country);                 // start/stop the real hip-hop track
+  updateMusic(country);                 // start/stop the real tracks (hip-hop rotation / country song)
   if(muted)return;
   const genre=country?'cn':'hh';
   if(genre!==lastGenre){ step=0; leadIdx=0; cnBar=0; lastGenre=genre; nextNote=Math.max(nextNote,actx.currentTime+0.04); }
-  // hip hop is covered by the real track -> don't layer the synth beat over it
-  if(!country && tracksOk){ nextNote=Math.max(nextNote,actx.currentTime+0.05); return; }
+  // a real mp3 covers this genre -> don't layer the synth beat over it (synth only fills a missing track)
+  const trackCovers = country ? cnOk : hhOk;
+  if(trackCovers){ nextNote=Math.max(nextNote,actx.currentTime+0.05); return; }
   const spb=country?0.205:0.182;   // seconds per 16th step
   while(nextNote < actx.currentTime+0.13){
     const t=nextNote, sw=(step%2? spb*0.12:0);  // swing
@@ -1006,7 +1017,7 @@ window.addEventListener('resize',resize);
 const startScreen=document.getElementById('startScreen');
 const overScreen=document.getElementById('overScreen');
 function showStart(){ startScreen.classList.remove('hidden'); overScreen.classList.add('hidden'); }
-function start(){ initAudio(); if(actx&&actx.state==='suspended')actx.resume(); trackIdx=0; playTrack(); /* gesture-allowed audio start */
+function start(){ initAudio(); if(actx&&actx.state==='suspended')actx.resume(); hhIdx=0; playHH(); /* gesture-allowed audio start */
   newGame(); startScreen.classList.add('hidden'); overScreen.classList.add('hidden'); castScreen.classList.add('hidden'); last=performance.now(); }
 
 /* ---- Meet the Cast ---- */
@@ -1080,7 +1091,7 @@ function saveCurrentScore(){
   renderBoards(ts);
 }
 function gameOver(){
-  S.running=false; pauseTracks();
+  S.running=false; pauseAllTracks();
   document.getElementById('goStats').innerHTML=
     `You made <b>$${S.score}</b><br>${S.served} plates served · Day ${S.day} · best combo x${S.bestCombo}`;
   const msgs=S.score>400?"Certified flavor legend. The block is talkin'.":
