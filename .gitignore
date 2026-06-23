@@ -1,0 +1,19 @@
+# --- keep this repo lean: only the game ships to GitHub ---
+# The big branding source files (.psd/.tif and the 18-360MB AI renders) stay
+# local — several exceed GitHub's 100MB hard limit and the game doesn't need
+# them (sprites are already inlined into the HTML).
+
+# ignore everything at the repo root by default...
+/*
+
+# ...then re-include only the game + docs
+!/.gitignore
+!/README.md
+!/HypesCookinn.html
+!/game
+
+# within the game folder, drop debug previews and caches
+game/assets/_*.png
+**/__pycache__/
+*.pyc
+.DS_Store
