@@ -372,7 +372,6 @@ function nextDay(){
   S.day++;
   S.spawnEvery=Math.max(1.5, 3.4 - S.day*0.18);
   S.dayServeTarget=6+S.day;
-  trackIdx=(S.day-1)%2;                          // rotate the hip-hop track each day
   let msg='DAY '+S.day+'!';
   if(S.day%5===0 && S.hearts<MAX_HEARTS){ S.hearts++; msg='DAY '+S.day+'  +❤️'; }  // survive 5 days -> heal
   addFloat(VW/2,VH/2-40,msg,'#ffb43d');
@@ -456,7 +455,9 @@ function update(dt){
   // hip-hop track and the country synth near the threshold
   S.switchLock=Math.max(0,S.switchLock-dt);
   if(S.switchLock<=0){
-    if(S.countryMode && S.music>0.44){ S.countryMode=false; S.switchLock=1.5; }
+    if(S.countryMode && S.music>0.44){ S.countryMode=false; S.switchLock=1.5;
+      trackIdx=(trackIdx+1)%Math.max(1,tracks.length);        // fresh Tre Hype track each time you flip back to hip hop
+      const tr=currentTrack(); if(tr) try{ tr.currentTime=0; }catch(e){} }
     else if(!S.countryMode && S.music<0.30){ S.countryMode=true; S.switchLock=1.5; }
   }
   const country = S.countryMode;
