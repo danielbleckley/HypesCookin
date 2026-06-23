@@ -75,6 +75,7 @@
       <div class="row"><span class="ic">👆</span><span><b>Tap stations</b> — Hype runs there & does the job. No D-pad.</span></div>
       <div class="row"><span class="ic">🧊</span><span>Grab a fillet from the <b>fridge</b>, drop it in the <b>fryer</b> (4s cook).</span></div>
       <div class="row"><span class="ic">🍽️</span><span>Grab the hot plate, <b>tap a customer</b> to serve. Combo = more $.</span></div>
+      <div class="row"><span class="ic">🍌</span><span>Some folks want <b>banana pudding</b> — grab it from the fridge top (no frying) & deliver for a <b>⚡ speed boost</b>.</span></div>
       <div class="row"><span class="ic">📻</span><span>Keep the <b>boombox on hip hop!</b> If it drifts country, the line bails.</span></div>
       <div class="row"><span class="ic">🧽</span><span>Diners leave <b>messy tables</b> — wipe them to seat more folks & earn tips.</span></div>
     </div>
@@ -162,7 +163,8 @@ const BASE_PATIENCE=26, EAT_TIME=7.5, MAX_HEARTS=5;
 const MUSIC_DRIFT_BASE=0.026;     // hip-hop -> country per sec at day 1
 const COUNTRY_ZONE=0.34;          // below this = country plays, line bails fast
 const COUNTRY_DRAIN=2.0;          // patience drain multiplier while country plays
-const PUDDING_BOOST=6.0, PUDDING_CD=14.0;   // banana-pudding speed boost & respawn
+const PUDDING_BOOST=6.0;          // speed boost for delivering a banana-pudding order
+const PUDDING_CHANCE=0.15;        // ~15% of customers order pudding (a special treat)
 
 /* ---------- state ---------- */
 let S;
@@ -171,7 +173,7 @@ function newGame(){
     running:true, t:0, score:0, hearts:MAX_HEARTS, day:1, served:0, combo:0, bestCombo:0,
     spawnT:1.2, spawnEvery:3.2, dayServeTarget:6,
     music:1.0, scratch:0, vibePulse:0, shake:0,
-    boost:0, puddingReady:true, puddingCd:0,   // banana-pudding speed boost
+    boost:0,   // banana-pudding speed boost (earned by delivering a pudding order)
     hero:{x:HERO_HOME.x,y:HERO_HOME.y,face:1,carry:null,task:null,anim:0},
     helper:{x:HELPER_HOME.x,y:HELPER_HOME.y,face:-1,carry:null,phase:'wander',
             wx:HELPER_HOME.x,wy:HELPER_HOME.y,restT:1.5,moving:false,anim:0},
@@ -192,7 +194,7 @@ function spawnCustomer(){
   let slot=S.queue.indexOf(null);
   if(slot<0) return;
   S.queue[slot]={
-    item:'fishchips',                 // only fish & chips is in the game for now
+    item: Math.random()<PUDDING_CHANCE ? 'pudding' : 'fishchips',   // pudding = special treat order
     patience:BASE_PATIENCE, maxP:BASE_PATIENCE,
     state:'arriving',
     x:COUNTER_X+90, y:QUEUE_Y[slot],
@@ -269,14 +271,10 @@ function heroArrive(h){
   if(t.type==='boombox'){ S.music=1.0; S.scratch=0.6; burst(ST.boombox.x,ST.boombox.y,'#ffb43d',14);
     addFloat(ST.boombox.x,ST.boombox.y-30,'FRESH BEATS','#27b3a6'); }
   else if(t.type==='fridge'){
-    if(t.item==='pudding'){          // banana pudding -> speed boost
-      if(S.puddingReady){ S.boost=PUDDING_BOOST; S.puddingReady=false; S.puddingCd=PUDDING_CD;
-        beep('pickup'); addFloat(ST.fridge.x,ST.fridge.y-92,'⚡ SPEED!','#ffb43d'); burst(ST.fridge.x,ST.fridge.y-30,'#ffe08a',18); }
-      else { beep('nope'); addFloat(ST.fridge.x,ST.fridge.y-92,'no pudding yet','#cfe6ee'); }
-    } else {                          // fish: grab, or tap again to put back
-      if(!h.carry){ h.carry='raw'; beep('serve'); }
-      else { h.carry=null; addFloat(ST.fridge.x,ST.fridge.y-92,'put back','#cfe6ee'); }
-    }
+    const want = t.item==='pudding' ? 'pudding' : 'raw';   // top = pudding, bottom = fish fillet
+    if(!h.carry){ h.carry=want; beep('serve'); }
+    else if(h.carry===want){ h.carry=null; addFloat(ST.fridge.x,ST.fridge.y-92,'put back','#cfe6ee'); }
+    else { beep('nope'); }            // hands full with the other item
   }
   else if(t.type==='fryer'){
     if(h.carry==='raw'){
@@ -293,9 +291,13 @@ function heroArrive(h){
   else if(t.type==='table'){ const tb=S.tables[t.i]; if(tb.dirty){ tb.dirty=false;
     burst(tb.x,tb.y-20,'#aee',12); addFloat(tb.x,tb.y-40,'SPARKLE','#7fd6ff'); beep('serve'); } }
   else if(t.type==='customer'){ const c=S.queue[t.i];
-    if(c && c.state==='waiting' && h.carry==='cooked'){ h.carry=null; serve(t.i); } }
+    if(c && c.state==='waiting'){
+      const need = c.item==='pudding' ? 'pudding' : 'cooked';   // pudding order needs pudding, fish order needs a fried plate
+      if(h.carry===need){ h.carry=null; serve(t.i,false); }
+      else { beep('nope'); }   // wrong item / empty-handed
+    } }
 }
-function serve(i){          // caller clears its own carry — hero OR helper can serve
+function serve(i,byHelper){          // caller clears its own carry — hero OR helper can serve
   const c=S.queue[i];
   const pts=10+Math.min(S.combo,9)*2;
   S.combo++; S.bestCombo=Math.max(S.bestCombo,S.combo);
@@ -303,6 +305,9 @@ function serve(i){          // caller clears its own carry — hero OR helper ca
   addFloat(COUNTER_X-60,QUEUE_Y[i]-30,'+$'+pts+(S.combo>2?'  x'+S.combo:''),'#ffb43d');
   burst(COUNTER_X-60,QUEUE_Y[i],'#5fd35f',16);
   beep('serve');
+  // delivering a banana-pudding order earns Hype a speed boost (only when the player serves it)
+  if(c.item==='pudding' && !byHelper){ S.boost=PUDDING_BOOST;
+    addFloat(COUNTER_X-60,QUEUE_Y[i]-52,'⚡ SPEED!','#ffd75e'); burst(COUNTER_X-60,QUEUE_Y[i],'#ffe08a',16); }
   // dine-in?
   const freeTable=S.tables.find(t=>!t.dirty && !t.occupant);
   if(c.dineIn && freeTable){
@@ -346,13 +351,14 @@ function updateHero(h,dt){
    customers. The catch: when every table is dirty, he refuses to serve people
    (he won't squeeze past a messy room) — so keep tables clean to keep his help. */
 function newWanderSpot(hp){ hp.wx=rand(150,360); hp.wy=rand(300,560); hp.restT=rand(1.0,2.6); }
-function firstWaiting(){ for(let i=0;i<S.queue.length;i++){ const c=S.queue[i]; if(c&&c.state==='waiting') return i; } return -1; }
+// the helper only handles FISH orders (pudding is the player's job — that's where the boost comes from)
+function firstFishWaiting(){ for(let i=0;i<S.queue.length;i++){ const c=S.queue[i]; if(c&&c.state==='waiting'&&c.item==='fishchips') return i; } return -1; }
 function updateHelper(hp,dt){
   hp.anim+=dt; hp.restT-=dt;
   const allDirty = S.tables.every(t=>t.dirty);
   const emptySlot = S.fryer.some(f=>f.state==='empty');
   const doneSlot  = S.fryer.some(f=>f.state==='done');
-  const canServe  = !allDirty && firstWaiting()>=0;   // the rule: no serving when the room's a mess
+  const canServe  = !allDirty && firstFishWaiting()>=0;   // a fish customer is waiting & the room isn't all dirty
 
   if(hp.phase==='wander'){
     hp.moving = !moveToward(hp,hp.wx,hp.wy,HELPER_SPD*0.65*dt);
@@ -383,10 +389,10 @@ function updateHelper(hp,dt){
   } else if(hp.phase==='toServe'){
     hp.moving=true;
     if(allDirty){ hp.phase='wander'; return; }          // stop serving while the room's all dirty
-    const idx=firstWaiting();
-    if(idx<0){ hp.phase='wander'; return; }             // nobody to serve; hold the plate & roam
+    const idx=firstFishWaiting();
+    if(idx<0){ hp.phase='wander'; return; }             // no fish order to serve; hold the plate & roam
     if(moveToward(hp,COUNTER_X-112,QUEUE_Y[idx],HELPER_SPD*dt)){
-      if(S.queue[idx] && S.queue[idx].state==='waiting' && hp.carry==='cooked'){ hp.carry=null; serve(idx); }
+      if(S.queue[idx] && S.queue[idx].state==='waiting' && hp.carry==='cooked'){ hp.carry=null; serve(idx,true); }
       hp.phase='wander'; newWanderSpot(hp);
     }
   }
@@ -400,7 +406,6 @@ function update(dt){
   if(S.shake>0) S.shake=Math.max(0,S.shake-dt*1.5);
   if(S.scratch>0) S.scratch=Math.max(0,S.scratch-dt);
   if(S.boost>0) S.boost=Math.max(0,S.boost-dt);                       // speed-boost countdown
-  if(!S.puddingReady){ S.puddingCd-=dt; if(S.puddingCd<=0) S.puddingReady=true; }  // pudding respawn
 
   // music drifts toward country
   S.music=clamp(S.music - MUSIC_DRIFT_BASE*(1+S.day*0.12)*dt, 0, 1);
@@ -538,13 +543,10 @@ function drawFridge(){
   ctx.fillStyle='#bcd6df'; ctx.fillRect(x-34,y,68,5);              // divider between the two compartments
   ctx.fillStyle='#7fa6b3'; roundRect(x+22,y-58,8,30,3); ctx.fill(); // handles
   ctx.fillStyle='#7fa6b3'; roundRect(x+22,y+12,8,30,3); ctx.fill();
-  // TOP compartment = banana pudding (greyed while on cooldown)
+  // TOP compartment = banana pudding (always stocked)
   ctx.textAlign='center';
   ctx.fillStyle='#a9853a'; ctx.font='900 10px "Arial Black"'; ctx.fillText('PUDDING',x,y-58);
-  if(S.puddingReady){ drawImgC(IMG.pudding,x,y-32,46); }
-  else { ctx.globalAlpha=.28; drawImgC(IMG.pudding,x,y-32,42); ctx.globalAlpha=1;
-    const p=1-clamp(S.puddingCd/PUDDING_CD,0,1);
-    ctx.beginPath();ctx.strokeStyle='#a9853a';ctx.lineWidth=3;ctx.arc(x,y-32,18,-1.57,-1.57+6.28*p);ctx.stroke(); }
+  drawImgC(IMG.pudding,x,y-32,46);
   // BOTTOM compartment = fish
   ctx.fillStyle='#2b6b7a'; ctx.font='900 10px "Arial Black"'; ctx.fillText('FRESH FISH',x,y+18);
   drawImgC(IMG.raw,x,y+46,48);
@@ -640,9 +642,9 @@ function drawHero(){
   const dh=92, dw=(body.width?dh*body.width/body.height:80);  // scale by height so both sprites match
   ctx.drawImage(body, -dw/2, 34-dh, dw, dh);
   ctx.restore();
-  // raw fillet rides above his head (no sprite shows a frozen fish)
-  if(h.carry==='raw'){ ctx.save();ctx.shadowColor='#000';ctx.shadowBlur=4;
-    drawImgC(IMG.raw,h.x,h.y-60,42);ctx.restore(); }
+  // carried ingredient rides above his head (raw fillet or banana pudding)
+  if(h.carry==='raw'||h.carry==='pudding'){ ctx.save();ctx.shadowColor='#000';ctx.shadowBlur=4;
+    drawImgC(h.carry==='pudding'?IMG.pudding:IMG.raw,h.x,h.y-60,42);ctx.restore(); }
   // speed-boost flash
   if(S.boost>0){ const b=Math.sin(S.t*22)*2;
     ctx.font='900 18px "Arial Black"';ctx.textAlign='center';
