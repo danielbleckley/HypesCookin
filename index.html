@@ -6,6 +6,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1a1320">
 <title>HYPE'S COOKINN — Fish, Chips & Hip Hop</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
 <style>
   :root{
     --orange:#f47a20; --orange2:#ffb43d; --teal:#27b3a6; --teal2:#1d8f8f;
@@ -13,10 +15,14 @@
   }
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;
     -webkit-user-select:none;user-select:none;touch-action:manipulation;}
-  html,body{height:100%;background:#0d0a12;overflow:hidden;font-family:'Trebuchet MS','Segoe UI',sans-serif;}
-  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;}
+  html,body{height:100%;background:#0d0a12;overflow:hidden;font-family:'Fredoka','Trebuchet MS','Segoe UI',sans-serif;}
+  /* svh = the SMALL viewport height, so the game always fits inside the browser
+     chrome (URL bar / toolbar) on mobile instead of getting clipped top & bottom */
+  #wrap{position:fixed;left:0;top:0;width:100vw;height:100vh;height:100svh;
+    display:flex;align-items:center;justify-content:center;}
   #stage{position:relative;aspect-ratio:480/854;
-    width:min(100vw, calc(100vh * 480 / 854));max-width:100vw;
+    width:min(100vw, calc(100vh * 480 / 854));
+    width:min(100vw, calc(100svh * 480 / 854));max-width:100vw;
     box-shadow:0 0 60px rgba(0,0,0,.7);background:#12101a;}
   canvas{display:block;width:100%;height:100%;}
 
@@ -32,13 +38,14 @@
     -webkit-text-stroke:3px var(--ink);text-shadow:5px 5px 0 var(--ink);transform:rotate(-3deg);}
   .logo .l2{font-size:clamp(40px,13vw,80px);color:var(--orange2);
     -webkit-text-stroke:3px var(--ink);text-shadow:5px 5px 0 var(--ink);transform:rotate(-2deg);margin-top:-6px;}
-  .tag{margin-top:14px;font-size:clamp(13px,3.6vw,18px);color:var(--teal);font-weight:bold;
-    letter-spacing:2px;text-transform:uppercase;}
+  .tag{margin-top:12px;font-family:'Bungee','Arial Black',sans-serif;font-size:clamp(12px,3.4vw,16px);
+    color:var(--teal);letter-spacing:2px;text-transform:uppercase;}
   .heroimg{width:42%;max-width:200px;margin:10px 0 4px;filter:drop-shadow(4px 6px 0 rgba(0,0,0,.4));}
+  .startlogo{width:90%;max-width:440px;margin:4px 0 2px;filter:drop-shadow(3px 5px 0 rgba(0,0,0,.45));}
   .btn{margin-top:18px;background:var(--orange);color:#fff;border:none;border-radius:14px;
-    font-size:clamp(18px,5vw,24px);font-weight:900;letter-spacing:1px;text-transform:uppercase;
-    padding:16px 40px;cursor:pointer;box-shadow:0 6px 0 #b4540f,0 10px 18px rgba(0,0,0,.4);
-    -webkit-text-stroke:1px #7a3505;}
+    font-family:'Bungee','Arial Black',sans-serif;font-size:clamp(17px,4.6vw,22px);letter-spacing:1px;
+    text-transform:uppercase;padding:15px 40px;cursor:pointer;
+    box-shadow:0 6px 0 #b4540f,0 10px 18px rgba(0,0,0,.4);}
   .btn:active{transform:translateY(4px);box-shadow:0 2px 0 #b4540f;}
   .how{max-width:380px;margin-top:18px;font-size:clamp(12px,3.3vw,15px);line-height:1.55;color:#e7dcc4;}
   .how b{color:var(--orange2);}
@@ -49,8 +56,8 @@
   .muteHint{margin-top:14px;font-size:12px;color:#9a8fb0;}
   .credit{position:absolute;bottom:10px;font-size:11px;color:#6b6080;letter-spacing:1px;}
   .linkbtn{margin-top:12px;background:none;border:2px solid var(--teal);color:var(--teal);
-    border-radius:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;
-    padding:10px 22px;font-size:14px;cursor:pointer;}
+    border-radius:12px;font-family:'Bungee','Arial Black',sans-serif;letter-spacing:1px;text-transform:uppercase;
+    padding:10px 22px;font-size:13px;cursor:pointer;}
   .linkbtn:active{transform:translateY(2px);}
   .castscroll{width:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;margin:6px 0;flex:1;}
   .castgrid{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;padding:6px;}
@@ -92,8 +99,7 @@
 
   <!-- START -->
   <div id="startScreen" class="screen">
-    <div class="logo"><div class="l1">Hype's</div><div class="l2">Cookinn</div></div>
-    <img id="startHero" class="heroimg" alt="">
+    <img id="startLogo" class="startlogo" alt="Hype's Cookinn">
     <div class="tag">Fish · Chips · Hip&nbsp;Hop</div>
     <div class="how">
       <div class="row"><span class="ic">👆</span><span><b>Tap stations</b> — Hype runs there & does the job. No D-pad.</span></div>
@@ -205,7 +211,7 @@ function newGame(){
     running:true, t:0, score:0, hearts:MAX_HEARTS, day:1, served:0, combo:0, bestCombo:0,
     bestEver: loadScores().reduce((m,s)=>Math.max(m,s.score),0),   // all-time best for the bottom readout
     spawnT:1.2, spawnEvery:3.2, dayServeTarget:6,
-    music:1.0, scratch:0, vibePulse:0, shake:0,
+    music:1.0, countryMode:false, switchLock:0, scratch:0, vibePulse:0, shake:0,
     boost:0,   // banana-pudding speed boost (earned by delivering a pudding order)
     hero:{x:HERO_HOME.x,y:HERO_HOME.y,face:1,carry:null,task:null,anim:0},
     helper:{x:HELPER_HOME.x,y:HELPER_HOME.y,face:-1,carry:null,phase:'wander',
@@ -253,9 +259,8 @@ function vcoord(e){
   return {x:cx/r.width*VW, y:cy/r.height*VH};
 }
 function hit(p){
-  // generous hit boxes — easier to tap on a phone
-  // boombox (big, center-top)
-  if(dist(p.x,p.y,ST.boombox.x,ST.boombox.y)<95) return {type:'boombox'};
+  // generous hit boxes — but stations the player aims at win over the boombox,
+  // which is checked LAST with a tight radius so it never steals a customer/serve tap
   // fridge — top half = banana pudding, bottom half = fish
   if(p.x<132 && p.y>286 && p.y<472) return {type:'fridge', item: p.y<ST.fridge.y?'pudding':'fish'};
   // fryer
@@ -269,6 +274,8 @@ function hit(p){
     const c=S.queue[i]; if(!c) continue;
     if(p.x>COUNTER_X-100 && Math.abs(p.y-QUEUE_Y[i])<52) return {type:'customer',i};
   }
+  // boombox last, tight radius (center of the speakers) so it doesn't grab nearby taps
+  if(dist(p.x,p.y,ST.boombox.x,ST.boombox.y)<70) return {type:'boombox'};
   return null;
 }
 function onTap(e){
@@ -442,7 +449,14 @@ function update(dt){
 
   // music drifts toward country
   S.music=clamp(S.music - MUSIC_DRIFT_BASE*(1+S.day*0.12)*dt, 0, 1);
-  const country = S.music < COUNTRY_ZONE;
+  // genre uses hysteresis + a dwell timer so it never rapidly flips between the
+  // hip-hop track and the country synth near the threshold
+  S.switchLock=Math.max(0,S.switchLock-dt);
+  if(S.switchLock<=0){
+    if(S.countryMode && S.music>0.44){ S.countryMode=false; S.switchLock=1.5; }
+    else if(!S.countryMode && S.music<0.30){ S.countryMode=true; S.switchLock=1.5; }
+  }
+  const country = S.countryMode;
   S.vibePulse += dt*(country?9:5);
 
   // spawn
@@ -501,7 +515,7 @@ function drawImgC(img,x,y,w){ if(!img||!img.width)return; const h=w*img.height/i
 function drawImgB(img,x,yBottom,w){ if(!img||!img.width)return; const h=w*img.height/img.width; ctx.drawImage(img,x-w/2,yBottom-h,w,h); return h; }
 
 function render(){
-  const country = S.music<COUNTRY_ZONE;
+  const country = S.countryMode;
   ctx.save();
   // screen shake
   if(S.shake>0){ ctx.translate(rand(-1,1)*S.shake*9, rand(-1,1)*S.shake*9); }
@@ -1090,7 +1104,7 @@ document.getElementById('castBack').addEventListener('click',closeCast);
 function boot(){
   resize();
   loadAssets(()=>{
-    document.getElementById('startHero').src = IMG.hero.src;
+    document.getElementById('startLogo').src = IMG.logo.src;
     document.getElementById('overHero').src  = IMG.heroCool.src;
     raf=requestAnimationFrame(frame);
   });
