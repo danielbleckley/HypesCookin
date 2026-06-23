@@ -9,6 +9,7 @@
 # ...then re-include only the game + docs
 !/.gitignore
 !/README.md
+!/index.html
 !/HypesCookinn.html
 !/game
 

@@ -8,8 +8,11 @@ all while keeping the **boombox on hip hop**. The second it drifts to country,
 the whole line starts walking out. 🤠➡️🚪
 
 ## ▶️ Play it
-- **Single file:** open [`HypesCookinn.html`](HypesCookinn.html) in any browser —
-  phone or desktop. All art is inlined, so it works offline with nothing attached.
+**🎮 Play now (any device): https://danielbleckley.github.io/HypesCookin/**
+
+- **Live:** the link above runs the game in any browser — phone, tablet, or desktop.
+- **Single file:** open [`HypesCookinn.html`](HypesCookinn.html) (or [`index.html`](index.html))
+  in any browser. All art is inlined, so it works offline with nothing attached.
 - **From source:** the same game lives at [`game/index.html`](game/index.html).
   To serve locally: `cd game && python3 -m http.server 8753`.
 
