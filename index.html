@@ -221,7 +221,7 @@ function newGame(){
     boost:0,   // banana-pudding speed boost (earned by delivering a pudding order)
     hero:{x:HERO_HOME.x,y:HERO_HOME.y,face:1,carry:null,task:null,anim:0},
     helper:{x:HELPER_HOME.x,y:HELPER_HOME.y,face:-1,carry:null,phase:'wander',
-            wx:HELPER_HOME.x,wy:HELPER_HOME.y,restT:1.5,moving:false,anim:0},
+            wx:HELPER_HOME.x,wy:HELPER_HOME.y,restT:1.5,moving:false,anim:0,grumbleT:0},
     fryer:Array.from({length:FRYER_SLOTS},()=>({state:'empty',t:0})),
     queue:Array(QUEUE_MAX).fill(null),
     tables:TABLE.map(p=>({x:p.x,y:p.y,dirty:false,occupant:null})),
@@ -411,11 +411,13 @@ function updateHelper(hp,dt){
   // ALL tables dirty -> the chef loses it: storms the dining area and refuses to
   // do anything (no cooking, no serving) until you wipe a table
   if(allDirty){
-    hp.phase='angry';
-    hp.moving = !moveToward(hp, 240, 556, HELPER_SPD*dt);   // stomp down toward the tables
+    if(hp.phase!=='angry'){ hp.phase='angry'; hp.grumbleT=0; }   // just started raging
+    hp.grumbleT-=dt;
+    if(hp.grumbleT<=0){ beep('angry'); hp.grumbleT=2.4; }        // grumble on entry, then every ~2.4s
+    hp.moving = !moveToward(hp, 240, 556, HELPER_SPD*dt);        // stomp down toward the tables
     return;
   } else if(hp.phase==='angry'){
-    hp.phase='wander'; newWanderSpot(hp);                   // calmed down once a table's clean
+    hp.phase='wander'; newWanderSpot(hp);                        // calmed down once a table's clean
   }
 
   if(hp.phase==='wander'){
@@ -1003,6 +1005,16 @@ function beep(kind){ if(!audioReady||muted)return; const t=actx.currentTime;
     o.frequency.setValueAtTime(220,t);o.frequency.exponentialRampToValueAtTime(70,t+0.3);
     env(g,t,0.01,0.3,0.3);o.connect(g);g.connect(master);o.start(t);o.stop(t+0.35);}
   else if(kind==='day'){ [523,659,784].forEach((f,i)=>kpString(t+i*0.09,f,0.4,0.2,0.992)); }
+  else if(kind==='angry'){ // frustrated chef grumble — low descending growl with a wobble
+    const o=actx.createOscillator(),o2=actx.createOscillator(),g=actx.createGain(),f=actx.createBiquadFilter();
+    f.type='lowpass';f.frequency.value=900; o.type='sawtooth';o2.type='square';o2.detune.value=-25;
+    o.frequency.setValueAtTime(168,t);o.frequency.exponentialRampToValueAtTime(84,t+0.36);
+    o2.frequency.setValueAtTime(168,t);o2.frequency.exponentialRampToValueAtTime(84,t+0.36);
+    const lfo=actx.createOscillator(),lg=actx.createGain();lfo.frequency.value=17;lg.gain.value=12;
+    lfo.connect(lg);lg.connect(o.frequency);lfo.start(t);lfo.stop(t+0.42);
+    env(g,t,0.012,0.36,0.34);
+    o.connect(f);o2.connect(f);f.connect(g);g.connect(master);
+    o.start(t);o2.start(t);o.stop(t+0.42);o2.stop(t+0.42); }
   else if(kind==='pickup'){ // bright rising "got it!" chime
     [784,1047,1319].forEach((f,i)=>{ const o=actx.createOscillator(),g=actx.createGain();
       o.type='triangle';o.frequency.value=f;env(g,t+i*0.05,0.004,0.13,0.32);
