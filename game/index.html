@@ -408,6 +408,16 @@ function updateHelper(hp,dt){
   const doneSlot  = S.fryer.some(f=>f.state==='done');
   const canServe  = !allDirty && firstFishWaiting()>=0;   // a fish customer is waiting & the room isn't all dirty
 
+  // ALL tables dirty -> the chef loses it: storms the dining area and refuses to
+  // do anything (no cooking, no serving) until you wipe a table
+  if(allDirty){
+    hp.phase='angry';
+    hp.moving = !moveToward(hp, 240, 556, HELPER_SPD*dt);   // stomp down toward the tables
+    return;
+  } else if(hp.phase==='angry'){
+    hp.phase='wander'; newWanderSpot(hp);                   // calmed down once a table's clean
+  }
+
   if(hp.phase==='wander'){
     hp.moving = !moveToward(hp,hp.wx,hp.wy,HELPER_SPD*0.65*dt);
     if(hp.carry==='cooked'){ if(canServe){ hp.phase='toServe'; return; } }   // holding a plate? go serve
@@ -712,26 +722,40 @@ function drawHero(){
     ctx.fillStyle='#ffd75e';ctx.fillText('⚡',h.x+24,h.y-42+b); }
 }
 function drawHelper(){
-  const hp=S.helper; const moving=hp.moving;
+  const hp=S.helper; const moving=hp.moving; const angry=hp.phase==='angry';
   const bob=moving?Math.abs(Math.sin(hp.anim*11))*3:Math.sin(hp.anim*3)*1.2;
+  const jit=(angry&&!moving)?Math.sin(hp.anim*42)*1.8:0;     // furious shake once he's stomped over
   ctx.save();
   ctx.fillStyle='rgba(0,0,0,.25)';ctx.beginPath();ctx.ellipse(hp.x,hp.y+26,20,7,0,0,6.28);ctx.fill();
-  ctx.translate(hp.x,hp.y-bob);
+  ctx.translate(hp.x+jit,hp.y-bob);
   if(hp.face<0) ctx.scale(-1,1);
-  // human helper: apron cook
   // legs
   ctx.fillStyle='#3a3a44';ctx.fillRect(-9,8,7,20);ctx.fillRect(2,8,7,20);
   // apron body
   ctx.fillStyle='#e8e2d2';roundRect(-13,-18,26,30,6);ctx.fill();
   ctx.fillStyle='#c44';ctx.fillRect(-13,-18,26,5); // apron strap
-  // arms
-  ctx.fillStyle='#f0c8a0';ctx.fillRect(-17,-12,6,18);ctx.fillRect(11,-12,6,18);
+  // arms — thrown up in the air when angry, otherwise hanging at his sides
+  ctx.fillStyle='#f0c8a0';
+  if(angry){ ctx.fillRect(-20,-38,6,24); ctx.fillRect(14,-38,6,24); }
+  else { ctx.fillRect(-17,-12,6,18); ctx.fillRect(11,-12,6,18); }
   // head
   ctx.fillStyle='#f0c8a0';ctx.beginPath();ctx.arc(0,-26,11,0,6.28);ctx.fill();
+  if(angry){ // furrowed brows
+    ctx.strokeStyle='#7a3b2a';ctx.lineWidth=2;ctx.beginPath();
+    ctx.moveTo(-8,-31);ctx.lineTo(-2,-28);ctx.moveTo(8,-31);ctx.lineTo(2,-28);ctx.stroke(); }
   // chef hat
   ctx.fillStyle='#fff';roundRect(-10,-44,20,12,5);ctx.fill();ctx.fillRect(-9,-36,18,6);
   ctx.restore();
-  if(hp.carry){ drawImgC(hp.carry==='cooked'?IMG.fishchips:IMG.raw, hp.x, hp.y-50, hp.carry==='cooked'?34:30); }
+  if(hp.carry && !angry){ drawImgC(hp.carry==='cooked'?IMG.fishchips:IMG.raw, hp.x, hp.y-50, hp.carry==='cooked'?34:30); }
+  // anger marks bursting from his head
+  if(angry){ const b=Math.sin(hp.anim*10)*3;
+    ctx.textAlign='center'; ctx.font='18px sans-serif';
+    ctx.fillText('💢', hp.x-21+jit, hp.y-52+b);
+    ctx.fillText('💢', hp.x+21+jit, hp.y-48-b);
+    ctx.font='900 22px "Arial Black",sans-serif';ctx.lineWidth=4;ctx.strokeStyle='rgba(0,0,0,.6)';
+    ctx.strokeText('!',hp.x+jit,hp.y-58+b); ctx.fillStyle='#e8443b';ctx.fillText('!',hp.x+jit,hp.y-58+b);
+    label(hp.x, hp.y-74, 'CLEAN UP!', '#e8443b');
+  }
 }
 function drawCustomer(c){
   const bobY=c.state==='eating'?Math.sin(c.bob*6)*1.5:Math.sin(c.bob*4)*2;
