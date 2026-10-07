@@ -13,6 +13,10 @@
 !/HypesCookinn.html
 !/game
 !/music
+!/CLAUDE.md
+!/.github
+!/.claude
+.claude/settings.local.json
 
 # within the game folder, drop debug previews and caches
 game/assets/_*.png
